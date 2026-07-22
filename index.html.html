@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Bons de Commande - Keller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        body { font-family: 'Inter', Arial, sans-serif; overflow: hidden; }
+
+        .text-keller-blue { color: #1A365D; }
+        .bg-keller-blue { background-color: #1A365D; }
+        
+        /* Styles A4 */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 12mm 15mm;
+            box-sizing: border-box;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+            font-size: 11px;
+            line-height: 1.3;
+            color: black;
+            margin: 0 auto;
+        }
+
+        .dotted-field {
+            border-bottom: 1px dotted #000;
+            position: relative;
+            min-height: 1.2rem;
+            flex-grow: 1;
+        }
+        .dotted-field span {
+            position: absolute;
+            bottom: 0px;
+            left: 4px;
+            color: #1e3a8a;
+            font-weight: 600;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .table-col { border-left: 1px solid #1A365D; }
+        .table-col:first-child { border-left: none; }
+        
+        .input-facile {
+            width: 100%; border: 1px solid #cbd5e1; border-radius: 0.5rem;
+            padding: 0.75rem; font-size: 0.95rem; background-color: #f8fafc;
+        }
+        .input-facile:focus {
+            outline: none; border-color: #2563eb; background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Impression 4 pages / 4 couleurs */
+        @media print {
+            body, html { overflow: visible !important; height: auto !important; background-color: white !important; }
+            #app-header, #sidebar, #view-dashboard { display: none !important; }
+            #view-generator { display: block !important; overflow: visible !important; }
+            #preview-container { 
+                width: 100% !important; margin: 0 !important; padding: 0 !important;
+                background-color: white !important; overflow: visible !important; 
+            }
+            .a4-page {
+                box-shadow: none !important; margin: 0 !important; padding: 10mm !important;
+                page-break-after: always;
+            }
+            .a4-page:last-child { page-break-after: auto; }
+            
+            .page-blanc { background-color: #ffffff !important; }
+            .page-jaune { background-color: #fef08a !important; }
+            .page-bleu  { background-color: #bfdbfe !important; }
+            .page-rose  { background-color: #fbcfe8 !important; }
+
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-200 h-screen flex flex-col">
+
+    <!-- HEADER -->
+    <header id="app-header" class="bg-keller-blue text-white shadow-md z-20 flex justify-between items-center px-6 py-3">
+        <div class="flex items-center gap-3">
+            <svg width="30" height="30" viewBox="0 0 32 40">
+                <path d="M0,20 L14,5 L14,35 Z" fill="#eab308"/>
+                <path d="M14,5 L28,20 L14,35 Z" fill="#1A365D"/>
+            </svg>
+            <h1 class="text-xl font-bold tracking-widest">KELLER</h1>
+            <span class="ml-4 px-3 py-1 bg-blue-800 rounded-full text-xs font-semibold">Suivi & Commandes</span>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="switchTab('generator')" id="tab-generator" class="px-4 py-2 bg-white text-keller-blue font-bold rounded-md transition-colors">Nouveau B.C.</button>
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-4 py-2 bg-blue-900 text-white font-bold rounded-md hover:bg-blue-800 transition-colors flex items-center gap-2">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Base de Données Excel
+            </button>
+        </div>
+    </header>
+
+    <!-- VUE GÉNÉRATEUR -->
+    <div id="view-generator" class="flex flex-1 overflow-hidden">
+        
+        <!-- BARRE LATÉRALE DE SAISIE -->
+        <div id="sidebar" class="w-[460px] bg-white shadow-2xl flex flex-col h-full z-10 border-r border-slate-300">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h2 class="text-base font-bold text-slate-800">Saisie du Bon de Commande</h2>
+                <div id="save-status" class="text-xs font-bold text-green-600 hidden">✓ Enregistré dans le Cloud</div>
+            </div>
+            
+            <div class="p-5 overflow-y-auto flex-1 space-y-4 bg-slate-50">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Numéro de B.C.</label>
+                        <input type="text" id="in-numero" class="input-facile font-bold text-blue-700" value="00248" oninput="updatePages()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Date B.C.</label>
+                        <input type="text" id="in-date-bc" class="input-facile" placeholder="JJ/MM/AAAA" oninput="updatePages()">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Fournisseur (Société)</label>
+                    <input type="text" id="in-fournisseur" class="input-facile" placeholder="Nom du fournisseur..." oninput="updatePages()">
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Affaire (Projet / Chantier)</label>
+                    <input type="text" id="in-affaire" class="input-facile" placeholder="Intitulé de l'affaire..." oninput="updatePages()">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Adresse de livraison</label>
+                    <input type="text" id="in-adresse" class="input-facile" oninput="updatePages()">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Date prévue livraison</label>
+                        <input type="text" id="in-date-livraison" class="input-facile" oninput="updatePages()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Contact livraison</label>
+                        <input type="text" id="in-contact" class="input-facile" oninput="updatePages()">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mode de paiement</label>
+                        <input type="text" id="in-paiement" class="input-facile" oninput="updatePages()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">B.C. établi par</label>
+                        <input type="text" id="in-etabli" class="input-facile" oninput="updatePages()">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Demandeur</label>
+                    <input type="text" id="in-demandeur" class="input-facile" oninput="updatePages()">
+                </div>
+
+                <!-- LIGNES DE COMMANDE LIBRES -->
+                <div class="mt-4 pt-3 border-t">
+                    <label class="block text-sm font-bold text-slate-800 mb-1">Articles / Lignes de Commande</label>
+                    <p class="text-[10px] text-slate-500 mb-2">Format libre : Code | Désignation | Qté | P.U.HT | Montant (Une ligne par article)</p>
+                    <textarea id="in-lignes" rows="6" class="input-facile resize-none font-mono text-[11px]" placeholder="Ex:&#10;B01  Béton C25/30  50  8500  425000&#10;A02  Acier HA   100  12000  1200000" oninput="updatePages()"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nom & Prénom (Signature)</label>
+                    <input type="text" id="in-nom" class="input-facile" oninput="updatePages()">
+                </div>
+            </div>
+
+            <!-- BOUTON D'ENREGISTREMENT ET IMPRESSION -->
+            <div class="p-4 bg-white border-t border-slate-200">
+                <button onclick="saveAndPrint()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-keller-blue py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    Enregistrer Base Excel & Imprimer (4 Couleurs)
+                </button>
+            </div>
+        </div>
+
+        <!-- ZONE APERÇU 4 EXEMPLAIRES -->
+        <div id="preview-container" class="flex-1 overflow-y-auto py-10 bg-slate-200">
+            <div id="pages-container" class="flex flex-col gap-10 pb-10"></div>
+        </div>
+    </div>
+
+    <!-- VUE TABLEAU DE BORD EXCEL -->
+    <div id="view-dashboard" class="hidden flex-1 overflow-y-auto bg-slate-50 p-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-end mb-6 border-b border-slate-300 pb-4">
+                <div>
+                    <h2 class="text-3xl font-bold text-keller-blue">Suivi Base de Données</h2>
+                    <p class="text-slate-500 mt-1">Historique centralisé de tous vos bons de commande.</p>
+                </div>
+                <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg font-bold shadow flex items-center gap-2 transition-colors">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"/></svg>
+                    Télécharger le fichier Excel (.csv)
+                </button>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                        <tr class="bg-keller-blue text-white text-xs">
+                            <th class="p-3 border-b">N° BC</th>
+                            <th class="p-3 border-b">Date</th>
+                            <th class="p-3 border-b">Fournisseur</th>
+                            <th class="p-3 border-b">Affaire</th>
+                            <th class="p-3 border-b">Établi par</th>
+                            <th class="p-3 border-b">Demandeur</th>
+                            <th class="p-3 border-b">Total HT</th>
+                            <th class="p-3 border-b">Articles</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="text-xs">
+                        <tr><td colspan="8" class="p-6 text-center text-slate-500">Chargement des données du cloud...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Moteur JS Firebase & Logique -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let db, ordersRef;
+        let ordersHistory = [];
+
+        async function initCloud() {
+            try {
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+                if(!firebaseConfig) return;
+
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                db = getFirestore(app);
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'keller-bc-app';
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if(user) {
+                        ordersRef = collection(db, 'artifacts', appId, 'public', 'data', 'commandes_keller');
+                        listenToOrders();
+                    }
+                });
+            } catch(e) { console.error("Cloud init error:", e); }
+        }
+
+        function listenToOrders() {
+            if(!ordersRef) return;
+            onSnapshot(ordersRef, (snapshot) => {
+                ordersHistory = [];
+                snapshot.forEach(doc => ordersHistory.push({ id: doc.id, ...doc.data() }));
+                ordersHistory.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                renderDashboard();
+            });
+        }
+
+        const exemplaires = [
+            { nom: "Original (Blanc)", couleur: "page-blanc" },
+            { nom: "Copie Comptabilité (Jaune)", couleur: "page-jaune" },
+            { nom: "Copie Magasin (Bleu)", couleur: "page-bleu" },
+            { nom: "Souche (Rose)", couleur: "page-rose" }
+        ];
+
+        window.updatePages = function() {
+            const data = {
+                numero: document.getElementById('in-numero').value,
+                dateBc: document.getElementById('in-date-bc').value,
+                fournisseur: document.getElementById('in-fournisseur').value,
+                affaire: document.getElementById('in-affaire').value,
+                adresse: document.getElementById('in-adresse').value,
+                dateLivraison: document.getElementById('in-date-livraison').value,
+                contact: document.getElementById('in-contact').value,
+                paiement: document.getElementById('in-paiement').value,
+                etabli: document.getElementById('in-etabli').value,
+                demandeur: document.getElementById('in-demandeur').value,
+                lignesBrutes: document.getElementById('in-lignes').value,
+                nom: document.getElementById('in-nom').value
+            };
+
+            const lignesTexte = data.lignesBrutes.split('\n');
+            let tableauHTML = '';
+            let totalGeneral = 0;
+            
+            for(let i = 0; i < 15; i++) {
+                let col1='', col2='', col3='', col4='', col5='';
+                
+                if (i < lignesTexte.length && lignesTexte[i].trim() !== '') {
+                    const mots = lignesTexte[i].trim().split(/\s{2,}|\t/);
+                    if(mots.length >= 2) {
+                        col1 = mots[0] || '';
+                        col5 = mots[mots.length-1] || '';
+                        col4 = mots.length > 2 ? mots[mots.length-2] : '';
+                        col3 = mots.length > 3 ? mots[mots.length-3] : '';
+                        col2 = mots.slice(1, mots.length > 3 ? mots.length - 3 : mots.length - 1).join(' ') || '';
+                    } else {
+                        col2 = lignesTexte[i];
+                    }
+                }
+
+                if (i === 0 && !col1) col1 = '✻';
+                if (col5 && !isNaN(parseFloat(col5))) totalGeneral += parseFloat(col5);
+
+                const bgClass = i % 2 === 0 ? 'bg-[#DCE6F1]' : '';
+                tableauHTML += `
+                    <div class="flex h-[24px] items-center text-[13px] font-semibold text-[#1e3a8a] ${bgClass}">
+                        <div class="w-[12%] text-center px-1 truncate">${col1}</div>
+                        <div class="w-[45%] h-full px-2 flex items-center truncate table-col">${col2}</div>
+                        <div class="w-[13%] h-full flex items-center justify-center truncate table-col">${col3}</div>
+                        <div class="w-[15%] h-full flex items-center justify-end pr-2 truncate table-col">${col4}</div>
+                        <div class="w-[15%] h-full flex items-center justify-end pr-3 truncate table-col">${col5}</div>
+                    </div>
+                `;
+            }
+
+            const container = document.getElementById('pages-container');
+            container.innerHTML = '';
+
+            exemplaires.forEach((ex) => {
+                const page = document.createElement('div');
+                page.className = `a4-page ${ex.couleur}`;
+                page.innerHTML = `
+                    <div class="absolute top-2 right-2 text-[8px] uppercase tracking-widest opacity-60 font-bold">${ex.nom}</div>
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-[55%]">
+                            <div class="flex items-center mb-1">
+                                <svg width="35" height="40" viewBox="0 0 32 40" class="mr-3">
+                                    <path d="M0,20 L14,5 L14,35 Z" fill="#eab308"/>
+                                    <path d="M14,5 L28,20 L14,35 Z" fill="#1A365D"/>
+                                </svg>
+                                <h1 class="text-[34px] font-[800] text-keller-blue tracking-wider" style="font-family: Arial, sans-serif; transform: scaleY(1.1);">KELLER</h1>
+                            </div>
+                            <p class="font-bold text-[13px]">Keller Fondations Spéciales SPA</p>
+                            <p class="text-[11px] mb-3">Société par actions au capital de 180 000 000 DZD</p>
+                            <div class="text-[11px] leading-[1.4]">
+                                <p>Adresse : 33, Route de Khmiss El Khechna Rouiba 16012 - Alger</p>
+                                <p>Mobile 0661 49 04 68 / 0660 37 26 85</p>
+                                <p>e-mail : agence@keller.com | www.keller-algerie.com</p>
+                            </div>
+                        </div>
+                        <div class="w-[45%] text-right flex flex-col items-end">
+                            <h2 class="text-[24px] font-extrabold text-keller-blue tracking-wide uppercase mt-2">Bon de Commande</h2>
+                            <p class="text-[10px] italic mb-2">(Références à mentionner sur factures)</p>
+                            <div class="text-[20px] font-bold mb-3 flex items-center justify-end w-full pr-12">
+                                <span class="mr-6">Nº</span> 
+                                <span class="tracking-widest text-left inline-block w-[80px]">${data.numero}</span>
+                            </div>
+                            <div class="rounded-xl p-3 w-full min-h-[90px] border border-blue-900/20 text-left flex flex-col justify-evenly bg-white/40 mix-blend-multiply">
+                                <div class="font-bold text-xs mb-1 text-slate-800">${data.fournisseur}</div>
+                                <div class="border-b border-dotted border-black w-full"></div>
+                                <div class="border-b border-dotted border-black w-full"></div>
+                                <div class="border-b border-dotted border-black w-full"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-5 flex gap-4">
+                        <div class="w-[50%] flex flex-col justify-between pt-1">
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">Affaire :</span><div class="dotted-field"><span>${data.affaire}</span></div></div>
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">Adresse de livraison :</span><div class="dotted-field"><span>${data.adresse}</span></div></div>
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">Date prévue :</span><div class="dotted-field"><span>${data.dateLivraison}</span></div></div>
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">Mode de paiement :</span><div class="dotted-field"><span>${data.paiement}</span></div></div>
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">Contact livraison :</span><div class="dotted-field"><span>${data.contact}</span></div></div>
+                            <div class="flex items-end mb-1"><span class="whitespace-nowrap mr-1">BC établi par :</span><div class="dotted-field"><span>${data.etabli}</span></div></div>
+                            <div class="border border-black rounded-lg p-2 mt-2 h-[75px] relative bg-white/30 mix-blend-multiply">
+                                <span class="absolute -top-2.5 left-3 px-1 text-[11px] font-bold" style="background-color: inherit;">Demandeur :</span>
+                                <p class="text-[#1e3a8a] font-semibold text-[12px] whitespace-pre-wrap mt-1">${data.demandeur}</p>
+                            </div>
+                        </div>
+                        <div class="w-[50%] text-[10.5px] leading-[1.3] italic pt-6 pl-4">
+                            <p class="font-semibold mb-1 not-italic">Messieurs,</p>
+                            <p class="mb-2">Nous vous passons commande de fournitures, prestations ou travaux suivants, aux conditions générales d'achat stipulées au verso.</p>
+                            <p>Votre facture accompagnée du feuillet rose devra être adressée en 4 exemplaires exclusivement à l'adresse suivante : Keller Fondations Spéciales SPA, 33, Route de Khemis El Khechna - ROUIBA - ALGER</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 bg-white/60 mix-blend-multiply rounded-t-full">
+                        <div class="bg-keller-blue text-white flex text-[13px] font-semibold py-[6px] px-2 rounded-full mb-1">
+                            <div class="w-[12%] text-center">Code</div>
+                            <div class="w-[45%] pl-4 text-center">Désignation</div>
+                            <div class="w-[13%] text-center">Quantité</div>
+                            <div class="w-[15%] text-center">P.U.HT</div>
+                            <div class="w-[15%] text-center">Montant</div>
+                        </div>
+                        <div class="border-b border-keller-blue">${tableauHTML}</div>
+                    </div>
+
+                    <div class="flex justify-between items-end mt-2">
+                        <div class="w-[50%]">
+                            <div class="flex items-end mb-1 w-[80%]"><span class="whitespace-nowrap mr-1">Date BC :</span><div class="dotted-field"><span>${data.dateBc}</span></div></div>
+                            <div class="flex items-end w-[80%]"><span class="whitespace-nowrap mr-1">Nom Prénom :</span><div class="dotted-field"><span>${data.nom}</span></div></div>
+                            <div class="border border-black rounded-lg p-2 mt-3 h-[85px] relative w-[90%] bg-white/30 mix-blend-multiply">
+                                <span class="absolute top-1 left-2 text-[11px]">Validation : cachet & signature</span>
+                            </div>
+                        </div>
+                        <div class="w-[45%] flex flex-col justify-end">
+                            <div class="flex items-center justify-between font-bold text-[14px] mb-4 pr-2 pl-4">
+                                <span>TOTAL HT DA</span>
+                                <span class="w-32 text-right border-b-2 border-black h-5 text-blue-900 pb-1">${totalGeneral > 0 ? totalGeneral.toLocaleString('fr-FR', {minimumFractionDigits: 2}) : ''}</span>
+                            </div>
+                            <div class="rounded-xl p-3 text-[9.5px] text-center border border-blue-900/20 leading-snug bg-white/40 mix-blend-multiply">
+                                <p class="font-bold">Nº d'article d'imposition : 164 200 913 28 - NIF : 000416096518411</p>
+                                <p class="font-bold">Registre de Commerce Alger : 04 B 09651 84 - NIB : 000416180238845</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(page);
+            });
+        };
+
+        window.saveAndPrint = async function() {
+            const data = {
+                numero: document.getElementById('in-numero').value || '000',
+                dateBc: document.getElementById('in-date-bc').value || '',
+                fournisseur: document.getElementById('in-fournisseur').value || '',
+                affaire: document.getElementById('in-affaire').value || '',
+                etabli: document.getElementById('in-etabli').value || '',
+                demandeur: document.getElementById('in-demandeur').value || '',
+                lignesBrutes: document.getElementById('in-lignes').value || '',
+                timestamp: serverTimestamp()
+            };
+
+            if(ordersRef) {
+                try {
+                    await addDoc(ordersRef, data);
+                    const status = document.getElementById('save-status');
+                    status.classList.remove('hidden');
+                    setTimeout(() => status.classList.add('hidden'), 3000);
+                } catch(e) { console.error(e); }
+            }
+
+            window.print();
+        };
+
+        function renderDashboard() {
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '';
+
+            if(ordersHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-500">Aucune commande enregistrée.</td></tr>';
+                return;
+            }
+
+            ordersHistory.forEach(order => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b border-slate-200";
+                
+                let dateStr = order.dateBc || (order.timestamp ? order.timestamp.toDate().toLocaleDateString('fr-FR') : '-');
+
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-keller-blue">${order.numero}</td>
+                    <td class="p-3">${dateStr}</td>
+                    <td class="p-3 font-semibold">${order.fournisseur || '-'}</td>
+                    <td class="p-3">${order.affaire || '-'}</td>
+                    <td class="p-3">${order.etabli || '-'}</td>
+                    <td class="p-3">${order.demandeur || '-'}</td>
+                    <td class="p-3 font-bold">...</td>
+                    <td class="p-3 text-xs italic text-slate-500">${(order.lignesBrutes || '').replace(/\n/g, ' / ')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.exportToExcel = function() {
+            if(ordersHistory.length === 0) { alert("Aucune donnée."); return; }
+
+            let csv = "\uFEFFNuméro BC;Date;Fournisseur;Affaire;Établi par;Demandeur;Lignes\n";
+            ordersHistory.forEach(o => {
+                csv += `${o.numero || ''};${o.dateBc || ''};${o.fournisseur || ''};${o.affaire || ''};${o.etabli || ''};${o.demandeur || ''};"${(o.lignesBrutes || '').replace(/"/g, '""')}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Suivi_Commandes_Keller_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        };
+
+        window.switchTab = function(tabName) {
+            const vGen = document.getElementById('view-generator');
+            const vDash = document.getElementById('view-dashboard');
+            const tGen = document.getElementById('tab-generator');
+            const tDash = document.getElementById('tab-dashboard');
+
+            if(tabName === 'generator') {
+                vGen.classList.remove('hidden'); vGen.classList.add('flex');
+                vDash.classList.add('hidden');
+                tGen.className = "px-4 py-2 bg-white text-keller-blue font-bold rounded-md";
+                tDash.className = "px-4 py-2 bg-blue-900 text-white font-bold rounded-md";
+            } else {
+                vGen.classList.add('hidden'); vGen.classList.remove('flex');
+                vDash.classList.remove('hidden');
+                tDash.className = "px-4 py-2 bg-white text-keller-blue font-bold rounded-md";
+                tGen.className = "px-4 py-2 bg-blue-900 text-white font-bold rounded-md";
+            }
+        };
+
+        initCloud();
+        updatePages();
+    </script>
+</body>
+</html>
